@@ -1,0 +1,625 @@
+{% extends "base.html" %}
+
+{% block title %}{{ server_id | title }} Analytics - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 fade-in">
+    
+    <!-- Page header -->
+    <div class="mb-8">
+        <nav class="flex mb-4" aria-label="Breadcrumb">
+            <ol class="flex items-center space-x-4">
+                <li>
+                    <a href="{{ url_for('dashboard.index') }}" class="text-gray-400 hover:text-gray-500">
+                        <i class="fas fa-home"></i>
+                        <span class="sr-only">Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <div class="flex items-center">
+                        <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
+                        <span class="text-gray-500">Server Analytics</span>
+                    </div>
+                </li>
+                <li>
+                    <div class="flex items-center">
+                        <i class="fas fa-chevron-right text-gray-400 mx-2"></i>
+                        <span class="text-gray-900 font-medium">{{ server_id | title }}</span>
+                    </div>
+                </li>
+            </ol>
+        </nav>
+        
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-center">
+                <i class="fas fa-server text-blue-600 text-3xl mr-4"></i>
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">{{ server_id | replace('-', ' ') | title }}</h1>
+                    <p class="text-gray-600">Detailed resource and cost analysis</p>
+                </div>
+            </div>
+            
+            <div class="mt-4 sm:mt-0 flex space-x-3">
+                <!-- Time period selector -->
+                <select id="periodSelect" class="form-select" onchange="changePeriod()">
+                    <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 days</option>
+                    <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+                    <option value="90" {% if days == 90 %}selected{% endif %}>Last 90 days</option>
+                </select>
+                
+                <!-- Refresh button -->
+                <button onclick="refreshData()" class="btn-secondary">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Status and Key Metrics -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Server Status -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Status</h3>
+                {% if server_summary and server_summary.get('data_points', 0) > 0 %}
+                <span class="status-badge status-badge-green">
+                    <i class="fas fa-check-circle mr-1"></i>
+                    Active
+                </span>
+                {% else %}
+                <span class="status-badge status-badge-red">
+                    <i class="fas fa-exclamation-circle mr-1"></i>
+                    No Data
+                </span>
+                {% endif %}
+            </div>
+            <div class="text-2xl font-bold text-gray-900 mb-2">
+                {{ server_summary.get('data_points', 0) }}
+            </div>
+            <div class="text-sm text-gray-500">Data points collected</div>
+        </div>
+        
+        <!-- Total Cost -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Total Cost</h3>
+                <i class="fas fa-dollar-sign text-blue-500 text-xl"></i>
+            </div>
+            <div class="text-2xl font-bold text-blue-600 mb-2">
+                {{ server_analytics.get('total_cost', 0) | currency }}
+            </div>
+            <div class="text-sm text-gray-500">{{ days }}-day period</div>
+        </div>
+        
+        <!-- Average Daily Cost -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Daily Average</h3>
+                <i class="fas fa-chart-line text-green-500 text-xl"></i>
+            </div>
+            <div class="text-2xl font-bold text-green-600 mb-2">
+                {{ server_analytics.get('avg_daily_cost', 0) | currency }}
+            </div>
+            <div class="text-sm text-gray-500">Per day average</div>
+        </div>
+        
+        <!-- Cost Trend -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Cost Trend</h3>
+                <i class="fas fa-trending-{% if server_analytics.get('cost_trend', 0) >= 0 %}up text-red-500{% else %}down text-green-500{% endif %} text-xl"></i>
+            </div>
+            <div class="text-2xl font-bold {% if server_analytics.get('cost_trend', 0) >= 0 %}text-red-600{% else %}text-green-600{% endif %} mb-2">
+                {{ server_analytics.get('cost_trend', 0) | abs | round(1) }}%
+            </div>
+            <div class="text-sm text-gray-500">
+                {% if server_analytics.get('cost_trend', 0) >= 0 %}Increasing{% else %}Decreasing{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Resource Utilization Metrics -->
+    {% if server_summary %}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <!-- CPU Utilization -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">CPU Usage</h3>
+                <i class="fas fa-microchip text-blue-500 text-xl"></i>
+            </div>
+            <div class="flex items-end space-x-4">
+                <div>
+                    <div class="text-3xl font-bold text-blue-600">{{ (server_summary.get('avg_cpu', 0) | round(1)) }}%</div>
+                    <div class="text-sm text-gray-500">Average</div>
+                </div>
+                <div class="flex-1">
+                    <div class="bg-gray-200 rounded-full h-2">
+                        <div class="bg-blue-600 h-2 rounded-full" style="width: {{ server_summary.get('avg_cpu', 0) }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- RAM Utilization -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Memory Usage</h3>
+                <i class="fas fa-memory text-green-500 text-xl"></i>
+            </div>
+            <div class="flex items-end space-x-4">
+                <div>
+                    <div class="text-3xl font-bold text-green-600">{{ (server_summary.get('avg_ram_usage', 0) | round(1)) }}%</div>
+                    <div class="text-sm text-gray-500">Average</div>
+                </div>
+                <div class="flex-1">
+                    <div class="bg-gray-200 rounded-full h-2">
+                        <div class="bg-green-600 h-2 rounded-full" style="width: {{ server_summary.get('avg_ram_usage', 0) }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Bandwidth Usage -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Bandwidth</h3>
+                <i class="fas fa-network-wired text-purple-500 text-xl"></i>
+            </div>
+            <div>
+                <div class="text-3xl font-bold text-purple-600">
+                    {{ (server_summary.get('total_bandwidth_gb', 0) | round(1)) }}
+                </div>
+                <div class="text-sm text-gray-500">GB transferred</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Cost Breakdown Chart -->
+    <div class="dashboard-card mb-8">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-semibold text-gray-900">Cost Breakdown</h3>
+            <div class="text-sm text-gray-500">{{ days }}-day analysis</div>
+        </div>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Pie chart -->
+            <div>
+                <div class="chart-container-sm">
+                    <canvas id="costBreakdownChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Breakdown details -->
+            <div class="space-y-4">
+                <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 bg-blue-600 rounded mr-3"></div>
+                        <span class="font-medium">CPU Cost</span>
+                    </div>
+                    <div class="text-right">
+                        <div class="font-bold text-blue-600">{{ cost_breakdown.cpu_cost | currency }}</div>
+                        <div class="text-sm text-blue-500">{{ cost_breakdown.cpu_percentage }}%</div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 bg-green-600 rounded mr-3"></div>
+                        <span class="font-medium">RAM Cost</span>
+                    </div>
+                    <div class="text-right">
+                        <div class="font-bold text-green-600">{{ cost_breakdown.ram_cost | currency }}</div>
+                        <div class="text-sm text-green-500">{{ cost_breakdown.ram_percentage }}%</div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 bg-purple-600 rounded mr-3"></div>
+                        <span class="font-medium">Bandwidth Cost</span>
+                    </div>
+                    <div class="text-right">
+                        <div class="font-bold text-purple-600">{{ cost_breakdown.bandwidth_cost | currency }}</div>
+                        <div class="text-sm text-purple-500">{{ cost_breakdown.bandwidth_percentage }}%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Historical Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Resource Usage Over Time -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Resource Usage Trends</h3>
+                <div class="flex space-x-2">
+                    <button id="resourceToggleCPU" class="btn-primary btn-sm" onclick="toggleResourceChart('cpu')">CPU</button>
+                    <button id="resourceToggleRAM" class="btn-secondary btn-sm" onclick="toggleResourceChart('ram')">RAM</button>
+                    <button id="resourceToggleBW" class="btn-secondary btn-sm" onclick="toggleResourceChart('bandwidth')">Bandwidth</button>
+                </div>
+            </div>
+            <div class="chart-container" id="resourceChartContainer">
+                <div class="flex justify-center items-center h-full" id="resourceChartLoading">
+                    <div class="loading-spinner mr-2"></div>
+                    Loading resource data...
+                </div>
+            </div>
+        </div>
+        
+        <!-- Cost Over Time -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Daily Cost Trends</h3>
+                <div class="text-sm text-gray-500">Last {{ days }} days</div>
+            </div>
+            <div class="chart-container" id="costChartContainer">
+                <div class="flex justify-center items-center h-full" id="costChartLoading">
+                    <div class="loading-spinner mr-2"></div>
+                    Loading cost data...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recommendations and Insights -->
+    {% if server_analytics.get('recommendations') %}
+    <div class="dashboard-card mb-8">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">
+            <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
+            Optimization Recommendations
+        </h3>
+        
+        <div class="space-y-3">
+            {% for recommendation in server_analytics.recommendations %}
+            <div class="alert alert-info">
+                <div class="flex items-start">
+                    <i class="fas fa-info-circle mr-2 mt-0.5"></i>
+                    <span>{{ recommendation }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Server Performance Summary -->
+    <div class="dashboard-card">
+        <h3 class="text-lg font-semibold text-gray-900 mb-6">Performance Summary</h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Efficiency Score -->
+            <div class="text-center">
+                <div class="text-3xl font-bold text-blue-600 mb-2">
+                    {{ server_analytics.get('efficiency_score', 0) | round(0) }}%
+                </div>
+                <div class="text-sm text-gray-500">Efficiency Score</div>
+                <div class="mt-2">
+                    {% set efficiency = server_analytics.get('efficiency_score', 0) %}
+                    {% if efficiency >= 80 %}
+                    <span class="status-badge status-badge-green">Excellent</span>
+                    {% elif efficiency >= 60 %}
+                    <span class="status-badge status-badge-blue">Good</span>
+                    {% elif efficiency >= 40 %}
+                    <span class="status-badge status-badge-yellow">Fair</span>
+                    {% else %}
+                    <span class="status-badge status-badge-red">Poor</span>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Peak Usage Hour -->
+            <div class="text-center">
+                <div class="text-3xl font-bold text-green-600 mb-2">
+                    {{ server_analytics.get('peak_usage_hour', 'N/A') }}
+                </div>
+                <div class="text-sm text-gray-500">Peak Usage Hour</div>
+                <div class="text-xs text-gray-400 mt-1">Based on CPU usage</div>
+            </div>
+            
+            <!-- Data Coverage -->
+            {% if server_summary %}
+            <div class="text-center">
+                <div class="text-3xl font-bold text-purple-600 mb-2">
+                    {{ server_summary.get('data_points', 0) }}
+                </div>
+                <div class="text-sm text-gray-500">Data Points</div>
+                <div class="text-xs text-gray-400 mt-1">Monitoring coverage</div>
+            </div>
+            {% endif %}
+            
+            <!-- Cost Stability -->
+            <div class="text-center">
+                <div class="text-3xl font-bold text-orange-600 mb-2">
+                    {% set trend = server_analytics.get('cost_trend', 0) | abs %}
+                    {% if trend < 5 %}
+                    <i class="fas fa-check-circle"></i>
+                    {% elif trend < 15 %}
+                    <i class="fas fa-exclamation-triangle"></i>
+                    {% else %}
+                    <i class="fas fa-exclamation-circle"></i>
+                    {% endif %}
+                </div>
+                <div class="text-sm text-gray-500">Cost Stability</div>
+                <div class="text-xs text-gray-400 mt-1">
+                    {% if trend < 5 %}Stable{% elif trend < 15 %}Moderate{% else %}Volatile{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const serverId = '{{ server_id }}';
+    const days = {{ days }};
+    let resourceChart = null;
+    let costChart = null;
+    let currentResourceView = 'cpu';
+    
+    // Initialize cost breakdown chart
+    const breakdownCtx = document.getElementById('costBreakdownChart').getContext('2d');
+    const costBreakdown = {{ cost_breakdown | tojson }};
+    
+    new Chart(breakdownCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['CPU Cost', 'RAM Cost', 'Bandwidth Cost'],
+            datasets: [{
+                data: [
+                    costBreakdown.cpu_cost,
+                    costBreakdown.ram_cost,
+                    costBreakdown.bandwidth_cost
+                ],
+                backgroundColor: [
+                    'rgba(59, 130, 246, 0.8)',
+                    'rgba(16, 185, 129, 0.8)',
+                    'rgba(139, 92, 246, 0.8)'
+                ],
+                borderColor: [
+                    'rgba(59, 130, 246, 1)',
+                    'rgba(16, 185, 129, 1)',
+                    'rgba(139, 92, 246, 1)'
+                ],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                            return context.label + ': ' + window.formatCurrency(context.parsed) + ' (' + percentage + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Load resource and cost charts
+    loadResourceChart('cpu');
+    loadCostChart();
+    
+    // Chart loading functions
+    async function loadResourceChart(metric) {
+        const container = document.getElementById('resourceChartContainer');
+        const loading = document.getElementById('resourceChartLoading');
+        
+        try {
+            loading.style.display = 'flex';
+            
+            const response = await fetch(`/api/servers/${serverId}/metrics?hours=${days * 24}&limit=500`);
+            const data = await response.json();
+            
+            if (resourceChart) {
+                resourceChart.destroy();
+            }
+            
+            loading.style.display = 'none';
+            container.innerHTML = '<canvas id="resourceChart"></canvas>';
+            
+            const ctx = document.getElementById('resourceChart').getContext('2d');
+            resourceChart = createResourceChart(ctx, data.metrics, metric);
+            
+        } catch (error) {
+            console.error('Error loading resource chart:', error);
+            loading.innerHTML = '<div class="text-red-500"><i class="fas fa-exclamation-circle mr-2"></i>Failed to load data</div>';
+        }
+    }
+    
+    async function loadCostChart() {
+        const container = document.getElementById('costChartContainer');
+        const loading = document.getElementById('costChartLoading');
+        
+        try {
+            loading.style.display = 'flex';
+            
+            const response = await fetch(`/api/servers/${serverId}/costs?days=${days}`);
+            const data = await response.json();
+            
+            loading.style.display = 'none';
+            container.innerHTML = '<canvas id="costChart"></canvas>';
+            
+            const ctx = document.getElementById('costChart').getContext('2d');
+            costChart = createCostChart(ctx, data.costs);
+            
+        } catch (error) {
+            console.error('Error loading cost chart:', error);
+            loading.innerHTML = '<div class="text-red-500"><i class="fas fa-exclamation-circle mr-2"></i>Failed to load data</div>';
+        }
+    }
+    
+    function createResourceChart(ctx, data, metric) {
+        let yLabel, dataKey, color, unit;
+        
+        switch (metric) {
+            case 'cpu':
+                yLabel = 'CPU Usage (%)';
+                dataKey = 'cpu_usage_percent';
+                color = 'rgba(59, 130, 246, 0.8)';
+                unit = '%';
+                break;
+            case 'ram':
+                yLabel = 'RAM Usage (%)';
+                dataKey = 'ram_usage_percent';
+                color = 'rgba(16, 185, 129, 0.8)';
+                unit = '%';
+                break;
+            case 'bandwidth':
+                yLabel = 'Bandwidth (MB)';
+                dataKey = 'bandwidth_out_mb';
+                color = 'rgba(139, 92, 246, 0.8)';
+                unit = ' MB';
+                break;
+        }
+        
+        return new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.map(d => d.timestamp),
+                datasets: [{
+                    label: yLabel,
+                    data: data.map(d => d[dataKey]),
+                    borderColor: color,
+                    backgroundColor: color.replace('0.8', '0.1'),
+                    tension: 0.1,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value + unit;
+                            }
+                        }
+                    },
+                    x: {
+                        type: 'time',
+                        time: {
+                            displayFormats: {
+                                hour: 'MMM DD HH:mm',
+                                day: 'MMM DD'
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.parsed.y.toFixed(2) + unit;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    function createCostChart(ctx, data) {
+        return new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.map(d => d.date),
+                datasets: [
+                    {
+                        label: 'Total Cost',
+                        data: data.map(d => d.total_cost),
+                        borderColor: 'rgba(59, 130, 246, 0.8)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.1,
+                        fill: true
+                    },
+                    {
+                        label: 'CPU Cost',
+                        data: data.map(d => d.cpu_cost),
+                        borderColor: 'rgba(16, 185, 129, 0.8)',
+                        tension: 0.1
+                    },
+                    {
+                        label: 'RAM Cost',
+                        data: data.map(d => d.ram_cost),
+                        borderColor: 'rgba(139, 92, 246, 0.8)',
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Bandwidth Cost',
+                        data: data.map(d => d.bandwidth_cost),
+                        borderColor: 'rgba(245, 158, 11, 0.8)',
+                        tension: 0.1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return window.formatCurrency(value);
+                            }
+                        }
+                    },
+                    x: {
+                        type: 'time',
+                        time: {
+                            parser: 'YYYY-MM-DD',
+                            displayFormats: {
+                                day: 'MMM DD'
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + window.formatCurrency(context.parsed.y);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Global functions
+    window.toggleResourceChart = function(metric) {
+        currentResourceView = metric;
+        
+        // Update button states
+        ['cpu', 'ram', 'bandwidth'].forEach(m => {
+            const btn = document.getElementById(`resourceToggle${m.toUpperCase()}`);
+            btn.className = m === metric ? 'btn-primary btn-sm' : 'btn-secondary btn-sm';
+        });
+        
+        loadResourceChart(metric);
+    };
+    
+    window.changePeriod = function() {
+        const newDays = document.getElementById('periodSelect').value;
+        window.location.href = `/server/${serverId}?days=${newDays}`;
+    };
+    
+    window.refreshData = function() {
+        window.location.reload();
+    };
+});
+</script>
+{% endblock %}

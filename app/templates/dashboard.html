@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 fade-in">
+    
+    <!-- Page header -->
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-900 mb-2">Cost Forecasting Dashboard</h2>
+        <p class="text-gray-600">Monitor and analyze server resource costs across your infrastructure</p>
+    </div>
+
+    <!-- Key Metrics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Daily Cost -->
+        <div class="metric-card metric-card-blue">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-medium">Daily Cost</h3>
+                    <p class="text-3xl font-bold">{{ dashboard_data.daily_cost | currency }}</p>
+                    <div class="flex items-center mt-2">
+                        <i class="fas fa-{% if dashboard_data.cost_change >= 0 %}arrow-up text-red-200{% else %}arrow-down text-green-200{% endif %} mr-1"></i>
+                        <span class="text-blue-100">{{ dashboard_data.cost_change | abs }}% from yesterday</span>
+                    </div>
+                </div>
+                <div class="text-4xl opacity-75">
+                    <i class="fas fa-dollar-sign"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Monthly Forecast -->
+        <div class="metric-card metric-card-green">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-medium">Monthly Forecast</h3>
+                    <p class="text-3xl font-bold">{{ dashboard_data.monthly_forecast | currency }}</p>
+                    <span class="text-green-100">Based on recent trends</span>
+                </div>
+                <div class="text-4xl opacity-75">
+                    <i class="fas fa-calendar-alt"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Active Servers -->
+        <div class="metric-card metric-card-purple">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-medium">Active Servers</h3>
+                    <p class="text-3xl font-bold">{{ dashboard_data.active_servers }}</p>
+                    <span class="text-purple-100">Monitoring resources</span>
+                </div>
+                <div class="text-4xl opacity-75">
+                    <i class="fas fa-server"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Total Cost -->
+        <div class="metric-card metric-card-orange">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-medium">Total Cost (30d)</h3>
+                    <p class="text-3xl font-bold">{{ dashboard_data.total_cost | currency }}</p>
+                    <span class="text-orange-100">Last 30 days</span>
+                </div>
+                <div class="text-4xl opacity-75">
+                    <i class="fas fa-chart-pie"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cost Breakdown Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <!-- CPU Costs -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">CPU Costs</h3>
+                <i class="fas fa-microchip text-blue-500 text-xl"></i>
+            </div>
+            <div class="text-2xl font-bold text-blue-600 mb-2">{{ dashboard_data.cpu_cost | currency }}</div>
+            <div class="text-sm text-gray-500">Compute resources</div>
+        </div>
+        
+        <!-- RAM Costs -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Memory Costs</h3>
+                <i class="fas fa-memory text-green-500 text-xl"></i>
+            </div>
+            <div class="text-2xl font-bold text-green-600 mb-2">{{ dashboard_data.ram_cost | currency }}</div>
+            <div class="text-sm text-gray-500">Memory resources</div>
+        </div>
+        
+        <!-- Bandwidth Costs -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Bandwidth Costs</h3>
+                <i class="fas fa-network-wired text-purple-500 text-xl"></i>
+            </div>
+            <div class="text-2xl font-bold text-purple-600 mb-2">{{ dashboard_data.bandwidth_cost | currency }}</div>
+            <div class="text-sm text-gray-500">Data transfer</div>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Cost Trends Chart -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Cost Trends (30 Days)</h3>
+                <div class="flex space-x-2">
+                    <button id="trendsToggleTotal" class="btn-primary btn-sm" onclick="toggleTrendsChart('total')">Total</button>
+                    <button id="trendsToggleComponents" class="btn-secondary btn-sm" onclick="toggleTrendsChart('components')">Components</button>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="costTrendsChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Server Comparison Chart -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Server Cost Comparison</h3>
+                <div class="text-sm text-gray-500">Last 30 days</div>
+            </div>
+            <div class="chart-container">
+                <canvas id="serverComparisonChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Summary Table -->
+    <div class="dashboard-card mb-8">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-semibold text-gray-900">Server Summary</h3>
+            <a href="{{ url_for('dashboard.compare_servers') }}" class="btn-primary">
+                <i class="fas fa-balance-scale mr-2"></i>
+                Detailed Comparison
+            </a>
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="table-auto">
+                <thead>
+                    <tr class="bg-gray-50">
+                        <th class="table-header">Server</th>
+                        <th class="table-header">Status</th>
+                        <th class="table-header">Avg CPU</th>
+                        <th class="table-header">Avg RAM</th>
+                        <th class="table-header">7-Day Cost</th>
+                        <th class="table-header">Daily Avg</th>
+                        <th class="table-header">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for server in server_summaries %}
+                    <tr class="table-row-hover">
+                        <td class="table-cell">
+                            <div class="flex items-center">
+                                <i class="fas fa-server text-gray-400 mr-3"></i>
+                                <div>
+                                    <div class="font-medium text-gray-900">{{ server.server_id }}</div>
+                                    <div class="text-sm text-gray-500">{{ server.get('data_points', 0) }} data points</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="table-cell">
+                            {% if server.get('data_points', 0) > 0 %}
+                            <span class="status-badge status-badge-green">
+                                <i class="fas fa-check-circle mr-1"></i>
+                                Active
+                            </span>
+                            {% else %}
+                            <span class="status-badge status-badge-red">
+                                <i class="fas fa-exclamation-circle mr-1"></i>
+                                No Data
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="table-cell">
+                            {{ (server.get('avg_cpu', 0) | round(1)) }}%
+                        </td>
+                        <td class="table-cell">
+                            {{ (server.get('avg_ram_usage', 0) | round(1)) }}%
+                        </td>
+                        <td class="table-cell font-medium">
+                            {{ server.get('total_cost_7days', 0) | currency }}
+                        </td>
+                        <td class="table-cell">
+                            {{ server.get('avg_daily_cost', 0) | currency }}
+                        </td>
+                        <td class="table-cell">
+                            <a href="{{ url_for('dashboard.server_detail', server_id=server.server_id) }}" 
+                               class="text-blue-600 hover:text-blue-800 font-medium">
+                                <i class="fas fa-chart-line mr-1"></i>
+                                View Details
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="dashboard-card">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <a href="{{ url_for('forecasting') }}" 
+               class="flex items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors duration-200">
+                <i class="fas fa-crystal-ball text-blue-600 text-2xl mr-4"></i>
+                <div>
+                    <div class="font-medium text-blue-900">Generate Forecast</div>
+                    <div class="text-sm text-blue-600">Predict future costs</div>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('dashboard.compare_servers') }}" 
+               class="flex items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors duration-200">
+                <i class="fas fa-balance-scale text-green-600 text-2xl mr-4"></i>
+                <div>
+                    <div class="font-medium text-green-900">Compare Servers</div>
+                    <div class="text-sm text-green-600">Analyze performance</div>
+                </div>
+            </a>
+            
+            <a href="{{ url_for('api.get_analytics_insights') }}" 
+               class="flex items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors duration-200">
+                <i class="fas fa-lightbulb text-purple-600 text-2xl mr-4"></i>
+                <div>
+                    <div class="font-medium text-purple-900">Get Insights</div>
+                    <div class="text-sm text-purple-600">Cost optimization tips</div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Chart data from Flask
+    const costTrends = {{ cost_trends | tojson }};
+    let currentTrendsView = 'total';
+    
+    // Initialize cost trends chart
+    const trendsCtx = document.getElementById('costTrendsChart').getContext('2d');
+    let trendsChart = createTrendsChart(trendsCtx, costTrends, 'total');
+    
+    // Initialize server comparison chart
+    const comparisonCtx = document.getElementById('serverComparisonChart').getContext('2d');
+    const comparisonChart = createServerComparisonChart(comparisonCtx, costTrends);
+    
+    // Chart creation functions
+    function createTrendsChart(ctx, data, view) {
+        const config = {
+            type: 'line',
+            data: {
+                labels: data.dates,
+                datasets: []
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return window.formatCurrency(value);
+                            }
+                        }
+                    },
+                    x: {
+                        type: 'time',
+                        time: {
+                            parser: 'YYYY-MM-DD',
+                            displayFormats: {
+                                day: 'MMM DD'
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + window.formatCurrency(context.parsed.y);
+                            }
+                        }
+                    },
+                    legend: {
+                        position: 'top'
+                    }
+                }
+            }
+        };
+        
+        if (view === 'total') {
+            config.data.datasets = [{
+                label: 'Total Cost',
+                data: data.total_costs,
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                tension: 0.1,
+                fill: true
+            }];
+        } else {
+            config.data.datasets = [
+                {
+                    label: 'CPU Cost',
+                    data: data.cpu_costs,
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.1
+                },
+                {
+                    label: 'RAM Cost',
+                    data: data.ram_costs,
+                    borderColor: 'rgb(16, 185, 129)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.1
+                },
+                {
+                    label: 'Bandwidth Cost',
+                    data: data.bandwidth_costs,
+                    borderColor: 'rgb(139, 92, 246)',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    tension: 0.1
+                }
+            ];
+        }
+        
+        return new Chart(ctx, config);
+    }
+    
+    function createServerComparisonChart(ctx, data) {
+        const serverNames = Object.keys(data.server_costs);
+        const serverTotals = serverNames.map(server => {
+            return data.server_costs[server].reduce((sum, cost) => sum + cost, 0);
+        });
+        
+        return new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: serverNames.map(name => name.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())),
+                datasets: [{
+                    data: serverTotals,
+                    backgroundColor: [
+                        'rgba(59, 130, 246, 0.8)',
+                        'rgba(16, 185, 129, 0.8)',
+                        'rgba(139, 92, 246, 0.8)',
+                        'rgba(245, 158, 11, 0.8)'
+                    ],
+                    borderColor: [
+                        'rgba(59, 130, 246, 1)',
+                        'rgba(16, 185, 129, 1)',
+                        'rgba(139, 92, 246, 1)',
+                        'rgba(245, 158, 11, 1)'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
+                                const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                return context.label + ': ' + window.formatCurrency(context.parsed) + ' (' + percentage + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Toggle trends chart view
+    window.toggleTrendsChart = function(view) {
+        currentTrendsView = view;
+        
+        // Update button states
+        document.getElementById('trendsToggleTotal').className = 
+            view === 'total' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm';
+        document.getElementById('trendsToggleComponents').className = 
+            view === 'components' ? 'btn-primary btn-sm' : 'btn-secondary btn-sm';
+        
+        // Destroy and recreate chart
+        trendsChart.destroy();
+        trendsChart = createTrendsChart(trendsCtx, costTrends, view);
+    };
+});
+</script>
+{% endblock %}

@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ app_name }}{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <link href="{{ url_for('static', filename='css/tailwind.css') }}" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="h-full">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-lg border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <!-- Logo and main nav -->
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center">
+                        <i class="fas fa-chart-line text-blue-600 text-2xl mr-3"></i>
+                        <h1 class="text-xl font-bold text-gray-800">
+                            <a href="{{ url_for('dashboard.index') }}" class="hover:text-blue-600">
+                                Cost Forecasting
+                            </a>
+                        </h1>
+                    </div>
+                    
+                    <!-- Main navigation -->
+                    <div class="hidden md:ml-8 md:flex md:space-x-1">
+                        <a href="{{ url_for('dashboard.index') }}" 
+                           class="nav-link {% if request.endpoint == 'dashboard.index' %}nav-link-active{% endif %}">
+                            <i class="fas fa-tachometer-alt mr-1"></i>
+                            Dashboard
+                        </a>
+                        <a href="{{ url_for('forecasting') }}" 
+                           class="nav-link {% if request.endpoint == 'forecasting' %}nav-link-active{% endif %}">
+                            <i class="fas fa-crystal-ball mr-1"></i>
+                            Forecasting
+                        </a>
+                        <a href="{{ url_for('dashboard.compare_servers') }}" 
+                           class="nav-link {% if request.endpoint == 'dashboard.compare_servers' %}nav-link-active{% endif %}">
+                            <i class="fas fa-balance-scale mr-1"></i>
+                            Compare
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Right side nav -->
+                <div class="flex items-center space-x-4">
+                    <!-- Server dropdown -->
+                    <div class="relative">
+                        <select id="serverSelect" class="form-select text-sm" onchange="navigateToServer()">
+                            <option value="">Select Server</option>
+                            {% for server in servers %}
+                            <option value="{{ server.id }}" 
+                                    {% if request.view_args and request.view_args.get('server_id') == server.id %}selected{% endif %}>
+                                {{ server.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Environment indicator -->
+                    {% if environment == 'development' %}
+                    <span class="status-badge status-badge-yellow">
+                        <i class="fas fa-code mr-1"></i>
+                        Dev
+                    </span>
+                    {% endif %}
+                    
+                    <!-- Mobile menu button -->
+                    <div class="md:hidden">
+                        <button id="mobileMenuButton" type="button" 
+                                class="text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 p-2 rounded-md"
+                                onclick="toggleMobileMenu()">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mobile menu -->
+        <div id="mobileMenu" class="md:hidden hidden">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t border-gray-200">
+                <a href="{{ url_for('dashboard.index') }}" 
+                   class="block px-3 py-2 text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md">
+                    <i class="fas fa-tachometer-alt mr-2"></i>
+                    Dashboard
+                </a>
+                <a href="{{ url_for('forecasting') }}" 
+                   class="block px-3 py-2 text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md">
+                    <i class="fas fa-crystal-ball mr-2"></i>
+                    Forecasting
+                </a>
+                <a href="{{ url_for('dashboard.compare_servers') }}" 
+                   class="block px-3 py-2 text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md">
+                    <i class="fas fa-balance-scale mr-2"></i>
+                    Compare
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+            {% for category, message in messages %}
+            <div class="alert alert-{{ 'error' if category == 'error' else category }} mb-4 fade-in">
+                <div class="flex items-center">
+                    <i class="fas fa-{% if category == 'error' %}exclamation-circle{% elif category == 'success' %}check-circle{% elif category == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %} mr-2"></i>
+                    <span>{{ message }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Main content -->
+    <main class="flex-1">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-12">
+        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="flex items-center text-sm text-gray-500 mb-4 md:mb-0">
+                    <i class="fas fa-university mr-2"></i>
+                    <span>INDT 4216 - Wayamba University of Sri Lanka</span>
+                </div>
+                <div class="flex items-center space-x-6 text-sm text-gray-500">
+                    <span>© {{ current_year }} Cost Forecasting Project</span>
+                    <a href="{{ url_for('health_check') }}" class="hover:text-gray-700">
+                        <i class="fas fa-heartbeat mr-1"></i>
+                        Status
+                    </a>
+                    <span class="text-xs">v{{ app_version }}</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // Mobile menu toggle
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobileMenu');
+            menu.classList.toggle('hidden');
+        }
+        
+        // Server navigation
+        function navigateToServer() {
+            const select = document.getElementById('serverSelect');
+            const serverId = select.value;
+            if (serverId) {
+                window.location.href = `/server/${serverId}`;
+            }
+        }
+        
+        // Auto-hide flash messages
+        document.addEventListener('DOMContentLoaded', function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(alert => {
+                setTimeout(() => {
+                    alert.style.transition = 'opacity 0.5s';
+                    alert.style.opacity = '0';
+                    setTimeout(() => alert.remove(), 500);
+                }, 5000);
+            });
+        });
+        
+        // Global error handler for AJAX requests
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Unhandled promise rejection:', event.reason);
+            // You could show a user-friendly error message here
+        });
+        
+        // Utility functions for formatting
+        window.formatCurrency = function(amount) {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 6
+            }).format(amount);
+        };
+        
+        window.formatPercentage = function(value, decimals = 1) {
+            return `${parseFloat(value).toFixed(decimals)}%`;
+        };
+        
+        window.formatNumber = function(value, decimals = 2) {
+            return parseFloat(value).toFixed(decimals);
+        };
+        
+        // Loading state management
+        window.showLoading = function(elementId) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.innerHTML = '<div class="flex justify-center items-center h-32"><div class="loading-spinner mr-2"></div>Loading...</div>';
+            }
+        };
+        
+        window.hideLoading = function(elementId) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.innerHTML = '';
+            }
+        };
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

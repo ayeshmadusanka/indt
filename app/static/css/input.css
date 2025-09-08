@@ -1,0 +1,226 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles for the cost forecasting dashboard */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply font-sans antialiased;
+  }
+}
+
+@layer components {
+  /* Dashboard Cards */
+  .dashboard-card {
+    @apply bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200;
+  }
+  
+  .dashboard-card-gradient {
+    @apply rounded-lg p-6 text-white shadow-lg;
+    background: linear-gradient(135deg, var(--tw-gradient-from), var(--tw-gradient-to));
+  }
+  
+  /* Metric Cards */
+  .metric-card {
+    @apply bg-gradient-to-r p-6 rounded-lg text-white shadow-lg hover:shadow-xl transition-shadow duration-200;
+  }
+  
+  .metric-card-blue {
+    @apply from-blue-500 to-blue-600;
+  }
+  
+  .metric-card-green {
+    @apply from-green-500 to-green-600;
+  }
+  
+  .metric-card-purple {
+    @apply from-purple-500 to-purple-600;
+  }
+  
+  .metric-card-orange {
+    @apply from-orange-500 to-orange-600;
+  }
+  
+  /* Navigation */
+  .nav-link {
+    @apply text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200;
+  }
+  
+  .nav-link-active {
+    @apply bg-gray-100 text-gray-900;
+  }
+  
+  /* Buttons */
+  .btn-primary {
+    @apply bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-200 text-gray-900 px-4 py-2 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors duration-200;
+  }
+  
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+  
+  /* Form Elements */
+  .form-input {
+    @apply mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500;
+  }
+  
+  .form-select {
+    @apply mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white;
+  }
+  
+  /* Tables */
+  .table-auto {
+    @apply min-w-full divide-y divide-gray-200;
+  }
+  
+  .table-header {
+    @apply px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider;
+  }
+  
+  .table-cell {
+    @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
+  }
+  
+  .table-row-hover {
+    @apply hover:bg-gray-50;
+  }
+  
+  /* Chart Containers */
+  .chart-container {
+    @apply relative h-64 md:h-80 lg:h-96 w-full;
+  }
+  
+  .chart-container-sm {
+    @apply relative h-48 w-full;
+  }
+  
+  /* Loading States */
+  .loading-spinner {
+    @apply inline-block h-4 w-4 border-2 border-gray-200 border-t-blue-600 rounded-full animate-spin;
+  }
+  
+  /* Status Badges */
+  .status-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .status-badge-green {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .status-badge-yellow {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+  
+  .status-badge-red {
+    @apply bg-red-100 text-red-800;
+  }
+  
+  .status-badge-blue {
+    @apply bg-blue-100 text-blue-800;
+  }
+  
+  /* Alerts */
+  .alert {
+    @apply p-4 rounded-md border-l-4;
+  }
+  
+  .alert-info {
+    @apply bg-blue-50 border-blue-400 text-blue-700;
+  }
+  
+  .alert-success {
+    @apply bg-green-50 border-green-400 text-green-700;
+  }
+  
+  .alert-warning {
+    @apply bg-yellow-50 border-yellow-400 text-yellow-700;
+  }
+  
+  .alert-error {
+    @apply bg-red-50 border-red-400 text-red-700;
+  }
+}
+
+@layer utilities {
+  /* Animation utilities */
+  .fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+  }
+  
+  .slide-up {
+    animation: slideUp 0.3s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes slideUp {
+    from { 
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to { 
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  /* Custom scrollbar */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(156 163 175) transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgb(156 163 175);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(107 114 128);
+  }
+}
+
+/* Chart.js custom styles */
+.chartjs-tooltip {
+  @apply bg-gray-800 text-white text-sm rounded-md shadow-lg;
+}
+
+/* Custom responsive utilities */
+@media (max-width: 640px) {
+  .chart-container {
+    @apply h-48;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  
+  .dashboard-card {
+    @apply shadow-none border border-gray-300;
+    break-inside: avoid;
+  }
+}

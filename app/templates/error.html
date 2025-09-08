@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Error - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md mx-auto">
+        <div class="text-center">
+            <!-- Error icon -->
+            <div class="mx-auto flex items-center justify-center h-24 w-24 rounded-full bg-red-100 mb-6">
+                <i class="fas fa-exclamation-triangle text-red-600 text-4xl"></i>
+            </div>
+            
+            <!-- Error code -->
+            {% if error_code %}
+            <h1 class="text-6xl font-bold text-gray-900 mb-4">{{ error_code }}</h1>
+            {% endif %}
+            
+            <!-- Error title -->
+            <h2 class="text-2xl font-semibold text-gray-900 mb-4">
+                {{ error or "An error occurred" }}
+            </h2>
+            
+            <!-- Error description -->
+            {% if error_description %}
+            <p class="text-gray-600 mb-8">{{ error_description }}</p>
+            {% endif %}
+            
+            <!-- Action buttons -->
+            <div class="space-y-4 sm:space-y-0 sm:space-x-4 sm:flex sm:justify-center">
+                <a href="{{ url_for('dashboard.index') }}" 
+                   class="btn-primary inline-flex items-center">
+                    <i class="fas fa-home mr-2"></i>
+                    Return to Dashboard
+                </a>
+                
+                <button onclick="window.history.back()" 
+                        class="btn-secondary inline-flex items-center">
+                    <i class="fas fa-arrow-left mr-2"></i>
+                    Go Back
+                </button>
+            </div>
+            
+            <!-- Help text -->
+            <div class="mt-8 text-sm text-gray-500">
+                <p>If the problem persists, please check:</p>
+                <ul class="list-disc list-inside mt-2 space-y-1">
+                    <li>Your internet connection</li>
+                    <li>That the database is properly set up</li>
+                    <li>The application logs for more details</li>
+                </ul>
+            </div>
+            
+            <!-- Developer info (only in development) -->
+            {% if environment == 'development' and error_details %}
+            <div class="mt-8 p-4 bg-gray-100 rounded-lg text-left">
+                <h3 class="font-semibold text-gray-900 mb-2">Developer Information:</h3>
+                <pre class="text-xs text-gray-700 overflow-x-auto">{{ error_details }}</pre>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

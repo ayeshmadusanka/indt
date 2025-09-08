@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+
+{% block title %}Forecasting - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 fade-in">
+    
+    <!-- Page header -->
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-900 mb-2">Cost Forecasting</h2>
+        <p class="text-gray-600">Predict future server costs using machine learning models</p>
+    </div>
+
+    <!-- Server Selection -->
+    <div class="dashboard-card mb-8">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-semibold text-gray-900">Generate Forecast</h3>
+            <div class="text-sm text-gray-500">Select server and forecast parameters</div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Server</label>
+                <select id="forecastServer" class="form-select">
+                    <option value="">Select Server</option>
+                    {% for server in servers %}
+                    <option value="{{ server.id }}">{{ server.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Forecast Days</label>
+                <select id="forecastDays" class="form-select">
+                    <option value="7">7 days</option>
+                    <option value="14">14 days</option>
+                    <option value="30" selected>30 days</option>
+                    <option value="60">60 days</option>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Model</label>
+                <select id="forecastModel" class="form-select">
+                    <option value="arima">ARIMA</option>
+                    <option value="prophet">Prophet</option>
+                    <option value="ensemble">Ensemble</option>
+                </select>
+            </div>
+            
+            <div class="flex items-end">
+                <button onclick="generateForecast()" class="btn-primary w-full">
+                    <i class="fas fa-crystal-ball mr-2"></i>
+                    Generate Forecast
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Forecast Results -->
+    <div id="forecastResults" class="hidden">
+        <!-- Forecast Chart -->
+        <div class="dashboard-card mb-8">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-semibold text-gray-900">Cost Forecast</h3>
+                <div id="forecastInfo" class="text-sm text-gray-500"></div>
+            </div>
+            
+            <div class="chart-container">
+                <canvas id="forecastChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Forecast Summary -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="dashboard-card text-center">
+                <h4 class="text-lg font-semibold text-gray-900 mb-2">Predicted Total Cost</h4>
+                <div id="forecastTotal" class="text-3xl font-bold text-blue-600 mb-2">$0.00</div>
+                <div class="text-sm text-gray-500">Forecast period</div>
+            </div>
+            
+            <div class="dashboard-card text-center">
+                <h4 class="text-lg font-semibold text-gray-900 mb-2">Daily Average</h4>
+                <div id="forecastAvg" class="text-3xl font-bold text-green-600 mb-2">$0.00</div>
+                <div class="text-sm text-gray-500">Per day average</div>
+            </div>
+            
+            <div class="dashboard-card text-center">
+                <h4 class="text-lg font-semibold text-gray-900 mb-2">Model Accuracy</h4>
+                <div id="forecastAccuracy" class="text-3xl font-bold text-purple-600 mb-2">-</div>
+                <div class="text-sm text-gray-500">MAPE score</div>
+            </div>
+        </div>
+        
+        <!-- Forecast Table -->
+        <div class="dashboard-card">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-semibold text-gray-900">Detailed Forecast</h3>
+                <button onclick="exportForecast()" class="btn-secondary">
+                    <i class="fas fa-download mr-2"></i>
+                    Export CSV
+                </button>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="table-auto">
+                    <thead>
+                        <tr class="bg-gray-50">
+                            <th class="table-header">Date</th>
+                            <th class="table-header">Predicted Cost</th>
+                            <th class="table-header">Lower Bound</th>
+                            <th class="table-header">Upper Bound</th>
+                            <th class="table-header">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody id="forecastTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Forecast data will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="forecastLoading" class="hidden dashboard-card text-center py-12">
+        <div class="loading-spinner mx-auto mb-4"></div>
+        <p class="text-gray-600">Generating forecast... This may take a moment.</p>
+    </div>
+
+    <!-- Error State -->
+    <div id="forecastError" class="hidden alert alert-error">
+        <div class="flex items-center">
+            <i class="fas fa-exclamation-circle mr-2"></i>
+            <span id="forecastErrorMessage">An error occurred while generating the forecast.</span>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let forecastChart = null;
+
+async function generateForecast() {
+    const serverId = document.getElementById('forecastServer').value;
+    const days = document.getElementById('forecastDays').value;
+    const model = document.getElementById('forecastModel').value;
+    
+    if (!serverId) {
+        showError('Please select a server');
+        return;
+    }
+    
+    // Show loading state
+    showLoading(true);
+    hideResults();
+    hideError();
+    
+    try {
+        // Get historical data first
+        const historicalResponse = await fetch(`/api/servers/${serverId}/costs?days=60`);
+        const historicalData = await historicalResponse.json();
+        
+        if (!historicalResponse.ok) {
+            throw new Error(historicalData.error || 'Failed to fetch historical data');
+        }
+        
+        // Simulate forecast generation (in a real implementation, this would call ML models)
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate processing time
+        
+        // Generate mock forecast data
+        const forecast = generateMockForecast(historicalData.costs, parseInt(days));
+        
+        // Display results
+        displayForecastResults(forecast, serverId, days, model);
+        
+    } catch (error) {
+        console.error('Forecast generation error:', error);
+        showError(error.message || 'Failed to generate forecast');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function generateMockForecast(historicalData, days) {
+    // Calculate baseline from historical data
+    const recentCosts = historicalData.slice(-14); // Last 14 days
+    const avgCost = recentCosts.reduce((sum, d) => sum + d.total_cost, 0) / recentCosts.length;
+    
+    // Generate forecast data with some trend and noise
+    const forecast = [];
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() + 1); // Start from tomorrow
+    
+    for (let i = 0; i < days; i++) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() + i);
+        
+        // Add some trend and seasonality
+        const trend = 1 + (i * 0.01); // Slight upward trend
+        const seasonality = 1 + 0.1 * Math.sin(2 * Math.PI * i / 7); // Weekly pattern
+        const noise = 1 + (Math.random() - 0.5) * 0.2; // Random variation
+        
+        const predicted = avgCost * trend * seasonality * noise;
+        const confidence = 0.15; // 15% confidence interval
+        
+        forecast.push({
+            date: date.toISOString().split('T')[0],
+            predicted_cost: predicted,
+            confidence_lower: predicted * (1 - confidence),
+            confidence_upper: predicted * (1 + confidence)
+        });
+    }
+    
+    return forecast;
+}
+
+function displayForecastResults(forecast, serverId, days, model) {
+    // Show results section
+    document.getElementById('forecastResults').classList.remove('hidden');
+    
+    // Update summary statistics
+    const totalCost = forecast.reduce((sum, f) => sum + f.predicted_cost, 0);
+    const avgCost = totalCost / forecast.length;
+    
+    document.getElementById('forecastTotal').textContent = window.formatCurrency(totalCost);
+    document.getElementById('forecastAvg').textContent = window.formatCurrency(avgCost);
+    document.getElementById('forecastAccuracy').textContent = '8.5%'; // Mock MAPE
+    document.getElementById('forecastInfo').textContent = `${serverId} - ${days} days - ${model.toUpperCase()} model`;
+    
+    // Create forecast chart
+    createForecastChart(forecast);
+    
+    // Populate forecast table
+    populateForecastTable(forecast);
+}
+
+function createForecastChart(forecast) {
+    const ctx = document.getElementById('forecastChart').getContext('2d');
+    
+    if (forecastChart) {
+        forecastChart.destroy();
+    }
+    
+    const dates = forecast.map(f => f.date);
+    const predictions = forecast.map(f => f.predicted_cost);
+    const lowerBounds = forecast.map(f => f.confidence_lower);
+    const upperBounds = forecast.map(f => f.confidence_upper);
+    
+    forecastChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [
+                {
+                    label: 'Predicted Cost',
+                    data: predictions,
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.1,
+                    fill: false
+                },
+                {
+                    label: 'Confidence Range',
+                    data: upperBounds,
+                    borderColor: 'rgba(59, 130, 246, 0.3)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: '+1',
+                    tension: 0.1
+                },
+                {
+                    label: 'Lower Bound',
+                    data: lowerBounds,
+                    borderColor: 'rgba(59, 130, 246, 0.3)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: false,
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return window.formatCurrency(value);
+                        }
+                    }
+                },
+                x: {
+                    type: 'time',
+                    time: {
+                        parser: 'YYYY-MM-DD',
+                        displayFormats: {
+                            day: 'MMM DD'
+                        }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': ' + window.formatCurrency(context.parsed.y);
+                        }
+                    }
+                },
+                legend: {
+                    position: 'top'
+                }
+            }
+        }
+    });
+}
+
+function populateForecastTable(forecast) {
+    const tbody = document.getElementById('forecastTableBody');
+    tbody.innerHTML = '';
+    
+    forecast.forEach(f => {
+        const row = document.createElement('tr');
+        row.className = 'table-row-hover';
+        row.innerHTML = `
+            <td class="table-cell">${f.date}</td>
+            <td class="table-cell font-medium">${window.formatCurrency(f.predicted_cost)}</td>
+            <td class="table-cell">${window.formatCurrency(f.confidence_lower)}</td>
+            <td class="table-cell">${window.formatCurrency(f.confidence_upper)}</td>
+            <td class="table-cell">
+                <span class="status-badge status-badge-blue">95%</span>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function showLoading(show) {
+    const loading = document.getElementById('forecastLoading');
+    if (show) {
+        loading.classList.remove('hidden');
+    } else {
+        loading.classList.add('hidden');
+    }
+}
+
+function hideResults() {
+    document.getElementById('forecastResults').classList.add('hidden');
+}
+
+function showError(message) {
+    const error = document.getElementById('forecastError');
+    document.getElementById('forecastErrorMessage').textContent = message;
+    error.classList.remove('hidden');
+}
+
+function hideError() {
+    document.getElementById('forecastError').classList.add('hidden');
+}
+
+function exportForecast() {
+    // Mock export functionality
+    alert('Forecast export functionality would be implemented here');
+}
+</script>
+{% endblock %}
