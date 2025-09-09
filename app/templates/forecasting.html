@@ -87,7 +87,7 @@
             
             <div class="dashboard-card text-center">
                 <h4 class="text-lg font-semibold text-gray-900 mb-2">Model Used</h4>
-                <div id="forecastModel" class="text-2xl font-bold text-purple-600 mb-2">-</div>
+                <div id="forecastModelDisplay" class="text-2xl font-bold text-purple-600 mb-2">-</div>
                 <div class="text-sm text-gray-500">Forecasting algorithm</div>
             </div>
             
@@ -221,12 +221,15 @@ function displayForecastResults(data, serverId, days, model) {
     document.getElementById('forecastResults').classList.remove('hidden');
     
     // Update summary statistics
-    const totalCost = data.summary.total_predicted_cost;
-    const avgCost = data.summary.avg_daily_cost;
+    const totalCost = data.summary?.total_predicted_cost || 0;
+    const avgCost = data.summary?.avg_daily_cost || 0;
     
     document.getElementById('forecastTotal').textContent = window.formatCurrency(totalCost);
     document.getElementById('forecastAvg').textContent = window.formatCurrency(avgCost);
-    document.getElementById('forecastModel').textContent = data.model_used;
+    
+    // Display model with fallback options
+    const modelDisplay = data.model_details || data.model_used || model.toUpperCase() || 'Unknown';
+    document.getElementById('forecastModelDisplay').textContent = modelDisplay;
     
     // Display accuracy
     if (data.accuracy && data.accuracy.status === 'success') {
@@ -235,13 +238,15 @@ function displayForecastResults(data, serverId, days, model) {
         document.getElementById('forecastAccuracy').textContent = 'N/A';
     }
     
-    document.getElementById('forecastInfo').textContent = `${serverId} - ${days} days - ${data.model_used} model`;
+    // Update info text with fallbacks
+    const modelInfo = data.model_details || data.model_used || model.toUpperCase() || 'Unknown';
+    document.getElementById('forecastInfo').textContent = `${serverId} - ${days} days - ${modelInfo} model`;
     
     // Create forecast chart
-    createForecastChartLocal(data.forecasts);
+    createForecastChartLocal(data.forecasts || []);
     
-    // Populate forecast table
-    populateForecastTable(data.forecasts);
+    // Populate forecast table  
+    populateForecastTable(data.forecasts || []);
 }
 
 function createForecastChartLocal(forecast) {

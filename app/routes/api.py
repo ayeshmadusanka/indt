@@ -715,6 +715,13 @@ def generate_forecast_with_accuracy(server_id: str):
             
             results['forecasts'] = forecast_data
             
+            # Add model-specific parameters
+            if model_type == 'arima' and 'model_params' in forecast_result:
+                p, d, q = forecast_result['model_params']
+                results['model_details'] = f"ARIMA({p},{d},{q})"
+            else:
+                results['model_details'] = model_type.upper()
+            
             # Calculate summary statistics
             predicted_costs = [f['predicted_cost'] for f in forecast_data]
             results['summary'] = {
