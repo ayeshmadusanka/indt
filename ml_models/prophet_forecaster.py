@@ -114,25 +114,35 @@ class ProphetForecaster:
         if 'date' not in cost_data.columns or 'total_cost' not in cost_data.columns:
             raise ValueError("cost_data must have 'date' and 'total_cost' columns")
         
-        # Prepare Prophet format
-        prophet_data = cost_data.copy()
+        # Prepare Prophet format - be very explicit about data types
+        prophet_data = cost_data[['date', 'total_cost']].copy()
+        
+        # Convert to proper types
         prophet_data['ds'] = pd.to_datetime(prophet_data['date'])
-        prophet_data['y'] = prophet_data['total_cost']
+        prophet_data['y'] = pd.to_numeric(prophet_data['total_cost'], errors='coerce')
+        
+        # Drop any rows with NaN values
+        prophet_data = prophet_data.dropna()
         
         # Sort by date
         prophet_data = prophet_data.sort_values('ds').reset_index(drop=True)
         
-        # Handle missing dates by resampling
-        prophet_data = prophet_data.set_index('ds')
-        prophet_data = prophet_data.resample('D').mean()
-        prophet_data = prophet_data.interpolate(method='linear')
-        prophet_data = prophet_data.fillna(method='bfill').fillna(method='ffill')
-        prophet_data = prophet_data.reset_index()
+        # Create a complete date range to avoid resampling issues
+        if len(prophet_data) > 1:
+            date_range = pd.date_range(start=prophet_data['ds'].min(), end=prophet_data['ds'].max(), freq='D')
+            complete_data = pd.DataFrame({'ds': date_range})
+            prophet_data = complete_data.merge(prophet_data, on='ds', how='left')
+            
+            # Forward fill missing values
+            prophet_data['y'] = prophet_data['y'].fillna(method='ffill').fillna(method='bfill')
         
         # Ensure positive values (Prophet works better with positive values)
         prophet_data['y'] = np.maximum(prophet_data['y'], 0.001)
         
-        return prophet_data[['ds', 'y']]
+        # Final validation
+        prophet_data = prophet_data[['ds', 'y']].dropna()
+        
+        return prophet_data
     
     def _add_custom_regressors(self, model: Prophet, data: pd.DataFrame) -> Prophet:
         """Add custom regressors for business context."""
@@ -178,22 +188,17 @@ class ProphetForecaster:
             # Create holidays dataframe
             self.holidays_df = self._create_holidays_dataframe()
             
-            # Initialize Prophet model
+            # Initialize Prophet model with simpler configuration
             self.model = Prophet(
                 growth=self.growth,
                 seasonality_mode=self.seasonality_mode,
-                yearly_seasonality=self.yearly_seasonality,
-                weekly_seasonality=self.weekly_seasonality,
-                daily_seasonality=self.daily_seasonality,
+                yearly_seasonality=False,  # Disable for short time series
+                weekly_seasonality=True,
+                daily_seasonality=False,   # Disable for daily data
                 seasonality_prior_scale=self.seasonality_prior_scale,
-                holidays_prior_scale=self.holidays_prior_scale,
                 changepoint_prior_scale=self.changepoint_prior_scale,
-                interval_width=self.interval_width,
-                holidays=self.holidays_df
+                interval_width=self.interval_width
             )
-            
-            # Add custom regressors
-            self.model = self._add_custom_regressors(self.model, prophet_data)
             
             # Fit the model
             logger.info("Fitting Prophet model...")
@@ -225,16 +230,6 @@ class ProphetForecaster:
             # Create future dataframe
             future = self.model.make_future_dataframe(periods=forecast_days)
             
-            # Add custom regressors to future dataframe
-            future['dow'] = future['ds'].dt.dayofweek
-            future['is_weekend'] = (future['dow'] >= 5).astype(int)
-            
-            future['month'] = future['ds'].dt.month
-            future['is_high_activity_month'] = future['month'].isin([11, 12, 1]).astype(int)
-            
-            future['day_of_month'] = future['ds'].dt.day
-            future['is_month_end'] = (future['day_of_month'] >= 28).astype(int)
-            
             # Generate forecast
             forecast = self.fitted_model.predict(future)
             
@@ -247,13 +242,13 @@ class ProphetForecaster:
             upper_bound = np.maximum(forecast_period['yhat_upper'].values, 0)
             
             return {
-                'dates': forecast_period['ds'].dt.date,
+                'dates': forecast_period['ds'].dt.date.values,
                 'forecasts': forecast_values,
                 'lower_bound': lower_bound,
                 'upper_bound': upper_bound,
                 'trend': forecast_period['trend'].values,
-                'seasonal': forecast_period.get('seasonal', np.zeros(len(forecast_period))).values,
-                'weekly': forecast_period.get('weekly', np.zeros(len(forecast_period))).values
+                'seasonal': forecast_period.get('seasonal', np.zeros(len(forecast_period))),
+                'weekly': forecast_period.get('weekly', np.zeros(len(forecast_period)))
             }
             
         except Exception as e:

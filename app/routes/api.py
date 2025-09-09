@@ -486,3 +486,249 @@ def health_check():
             'error': str(e),
             'timestamp': datetime.now().isoformat()
         }), 500
+
+@api_bp.route('/models/accuracy/<server_id>')
+def get_model_accuracy(server_id: str):
+    """Calculate and compare accuracy for ARIMA and Prophet models."""
+    try:
+        # Validate server_id
+        valid_servers = ['web-frontend', 'api-backend', 'database', 'cache-server']
+        if server_id not in valid_servers:
+            return jsonify({'error': 'Invalid server ID'}), 400
+        
+        db = get_database()
+        costs_dao = DailyCostsDAO(db)
+        
+        # Get historical data for model training and testing
+        end_date = date.today()
+        start_date = end_date - timedelta(days=90)  # Use 90 days for analysis
+        historical_data = costs_dao.get_costs_by_date_range(start_date, end_date, server_id)
+        
+        if historical_data.empty or len(historical_data) < 20:
+            return jsonify({'error': 'Insufficient historical data for accuracy calculation'}), 400
+        
+        # Split data for training/testing (80% train, 20% test)
+        split_idx = int(len(historical_data) * 0.8)
+        train_data = historical_data.iloc[:split_idx]
+        test_data = historical_data.iloc[split_idx:]
+        
+        accuracy_results = {
+            'server_id': server_id,
+            'data_period': {
+                'start': start_date.strftime('%Y-%m-%d'),
+                'end': end_date.strftime('%Y-%m-%d'),
+                'total_days': len(historical_data),
+                'train_days': len(train_data),
+                'test_days': len(test_data)
+            },
+            'models': {}
+        }
+        
+        # Test ARIMA model
+        try:
+            from ml_models.arima_forecaster import ARIMAForecaster
+            arima_forecaster = ARIMAForecaster()
+            
+            arima_fit_success = arima_forecaster.fit(train_data, server_id)
+            if arima_fit_success and len(test_data) > 0:
+                arima_accuracy = arima_forecaster.validate_model(test_data)
+                accuracy_results['models']['ARIMA'] = {
+                    'status': 'success',
+                    'mae': round(arima_accuracy['mae'], 4),
+                    'rmse': round(arima_accuracy['rmse'], 4),
+                    'mape': round(arima_accuracy['mape'], 2),
+                    'model_params': arima_forecaster.best_params
+                }
+            else:
+                accuracy_results['models']['ARIMA'] = {
+                    'status': 'failed',
+                    'error': 'Model fitting failed or insufficient test data'
+                }
+        except Exception as e:
+            accuracy_results['models']['ARIMA'] = {
+                'status': 'error',
+                'error': str(e)
+            }
+        
+        # Test Prophet model
+        try:
+            from ml_models.prophet_forecaster import ProphetForecaster
+            prophet_forecaster = ProphetForecaster()
+            
+            prophet_fit_success = prophet_forecaster.fit(train_data, server_id)
+            if prophet_fit_success and len(test_data) > 0:
+                prophet_accuracy = prophet_forecaster.validate_model(test_data)
+                accuracy_results['models']['Prophet'] = {
+                    'status': 'success',
+                    'mae': round(prophet_accuracy['mae'], 4),
+                    'rmse': round(prophet_accuracy['rmse'], 4),
+                    'mape': round(prophet_accuracy['mape'], 2),
+                    'seasonality_mode': prophet_forecaster.seasonality_mode,
+                    'growth': prophet_forecaster.growth
+                }
+            else:
+                accuracy_results['models']['Prophet'] = {
+                    'status': 'failed',
+                    'error': 'Model fitting failed or insufficient test data'
+                }
+        except Exception as e:
+            accuracy_results['models']['Prophet'] = {
+                'status': 'error',
+                'error': str(e)
+            }
+        
+        # Add comparison summary
+        successful_models = [model for model, data in accuracy_results['models'].items() 
+                           if data['status'] == 'success']
+        
+        if len(successful_models) >= 2:
+            arima_mape = accuracy_results['models']['ARIMA'].get('mape', float('inf'))
+            prophet_mape = accuracy_results['models']['Prophet'].get('mape', float('inf'))
+            
+            if arima_mape < prophet_mape:
+                better_model = 'ARIMA'
+                mape_difference = prophet_mape - arima_mape
+            elif prophet_mape < arima_mape:
+                better_model = 'Prophet'
+                mape_difference = arima_mape - prophet_mape
+            else:
+                better_model = 'Tie'
+                mape_difference = 0
+            
+            accuracy_results['comparison'] = {
+                'better_model': better_model,
+                'mape_difference': round(mape_difference, 2),
+                'arima_mape': arima_mape if arima_mape != float('inf') else None,
+                'prophet_mape': prophet_mape if prophet_mape != float('inf') else None
+            }
+        else:
+            accuracy_results['comparison'] = {
+                'note': f'Only {len(successful_models)} model(s) successful - comparison not available'
+            }
+        
+        return jsonify(accuracy_results)
+    
+    except Exception as e:
+        current_app.logger.error(f"Model accuracy calculation error: {e}")
+        return jsonify({'error': f'Failed to calculate model accuracy: {str(e)}'}), 500
+
+@api_bp.route('/forecast/generate/<server_id>')
+def generate_forecast_with_accuracy(server_id: str):
+    """Generate real-time forecast with integrated accuracy calculation."""
+    try:
+        # Validate server_id
+        valid_servers = ['web-frontend', 'api-backend', 'database', 'cache-server']
+        if server_id not in valid_servers:
+            return jsonify({'error': 'Invalid server ID'}), 400
+        
+        # Get query parameters
+        forecast_days = int(request.args.get('days', 30))
+        model_type = request.args.get('model', 'arima').lower()
+        
+        if model_type not in ['arima', 'prophet']:
+            return jsonify({'error': 'Invalid model type. Use "arima" or "prophet"'}), 400
+        
+        db = get_database()
+        costs_dao = DailyCostsDAO(db)
+        
+        # Get historical data for model training and testing
+        end_date = date.today()
+        start_date = end_date - timedelta(days=90)  # Use 90 days for training
+        historical_data = costs_dao.get_costs_by_date_range(start_date, end_date, server_id)
+        
+        if historical_data.empty or len(historical_data) < 20:
+            return jsonify({'error': 'Insufficient historical data for forecasting'}), 400
+        
+        # Split data for training/testing (80% train, 20% test for accuracy)
+        split_idx = int(len(historical_data) * 0.8)
+        train_data = historical_data.iloc[:split_idx]
+        test_data = historical_data.iloc[split_idx:]
+        
+        results = {
+            'server_id': server_id,
+            'model_used': model_type.upper(),
+            'forecast_days': forecast_days,
+            'data_period': {
+                'start': start_date.strftime('%Y-%m-%d'),
+                'end': end_date.strftime('%Y-%m-%d'),
+                'total_days': len(historical_data),
+                'train_days': len(train_data),
+                'test_days': len(test_data)
+            }
+        }
+        
+        # Initialize and train the selected model
+        if model_type == 'arima':
+            from ml_models.arima_forecaster import ARIMAForecaster
+            model = ARIMAForecaster()
+        else:  # prophet
+            from ml_models.prophet_forecaster import ProphetForecaster
+            model = ProphetForecaster()
+        
+        # Fit model on all historical data for best forecast quality
+        if not model.fit(historical_data, server_id):
+            return jsonify({'error': f'{model_type.upper()} model fitting failed'}), 500
+        
+        # Calculate model accuracy on test data (using separate fit for accuracy)
+        accuracy_model = ARIMAForecaster() if model_type == 'arima' else ProphetForecaster()
+        
+        try:
+            if accuracy_model.fit(train_data, server_id) and len(test_data) > 0:
+                accuracy_metrics = accuracy_model.validate_model(test_data)
+                results['accuracy'] = {
+                    'mae': round(accuracy_metrics['mae'], 4),
+                    'rmse': round(accuracy_metrics['rmse'], 4),
+                    'mape': round(accuracy_metrics['mape'], 2),
+                    'status': 'success'
+                }
+            else:
+                results['accuracy'] = {
+                    'mae': None,
+                    'rmse': None,
+                    'mape': None,
+                    'status': 'failed',
+                    'error': 'Accuracy calculation failed - model fitting unsuccessful'
+                }
+        except Exception as e:
+            current_app.logger.warning(f"Accuracy calculation failed: {e}")
+            results['accuracy'] = {
+                'mae': None,
+                'rmse': None,
+                'mape': None,
+                'status': 'error',
+                'error': str(e)
+            }
+        
+        # Generate forecast
+        try:
+            forecast_result = model.predict(forecast_days, confidence_level=0.95)
+            
+            # Format forecast data
+            forecast_data = []
+            for i, date_val in enumerate(forecast_result['dates']):
+                forecast_data.append({
+                    'date': date_val.strftime('%Y-%m-%d'),
+                    'predicted_cost': round(forecast_result['forecasts'][i], 6),
+                    'confidence_lower': round(forecast_result['lower_bound'][i], 6),
+                    'confidence_upper': round(forecast_result['upper_bound'][i], 6)
+                })
+            
+            results['forecasts'] = forecast_data
+            
+            # Calculate summary statistics
+            predicted_costs = [f['predicted_cost'] for f in forecast_data]
+            results['summary'] = {
+                'total_predicted_cost': round(sum(predicted_costs), 4),
+                'avg_daily_cost': round(sum(predicted_costs) / len(predicted_costs), 6),
+                'forecast_period': f"{forecast_days} days"
+            }
+            
+        except Exception as e:
+            current_app.logger.error(f"Forecast generation failed: {e}")
+            return jsonify({'error': f'Forecast generation failed: {str(e)}'}), 500
+        
+        return jsonify(results)
+        
+    except Exception as e:
+        current_app.logger.error(f"Generate forecast error: {e}")
+        return jsonify({'error': 'Failed to generate forecast'}), 500

@@ -56,6 +56,7 @@
         </div>
     </div>
 
+
     <!-- Forecast Results -->
     <div id="forecastResults" class="hidden">
         <!-- Forecast Chart -->
@@ -71,7 +72,7 @@
         </div>
         
         <!-- Forecast Summary -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div class="dashboard-card text-center">
                 <h4 class="text-lg font-semibold text-gray-900 mb-2">Predicted Total Cost</h4>
                 <div id="forecastTotal" class="text-3xl font-bold text-blue-600 mb-2">$0.00</div>
@@ -85,8 +86,14 @@
             </div>
             
             <div class="dashboard-card text-center">
+                <h4 class="text-lg font-semibold text-gray-900 mb-2">Model Used</h4>
+                <div id="forecastModel" class="text-2xl font-bold text-purple-600 mb-2">-</div>
+                <div class="text-sm text-gray-500">Forecasting algorithm</div>
+            </div>
+            
+            <div class="dashboard-card text-center">
                 <h4 class="text-lg font-semibold text-gray-900 mb-2">Model Accuracy</h4>
-                <div id="forecastAccuracy" class="text-3xl font-bold text-purple-600 mb-2">-</div>
+                <div id="forecastAccuracy" class="text-3xl font-bold text-orange-600 mb-2">-</div>
                 <div class="text-sm text-gray-500">MAPE score</div>
             </div>
         </div>
@@ -157,22 +164,16 @@ async function generateForecast() {
     hideError();
     
     try {
-        // Get historical data first
-        const historicalResponse = await fetch(`/api/servers/${serverId}/costs?days=60`);
-        const historicalData = await historicalResponse.json();
+        // Call the new integrated forecast generation endpoint
+        const response = await fetch(`/api/forecast/generate/${serverId}?days=${days}&model=${model}`);
+        const data = await response.json();
         
-        if (!historicalResponse.ok) {
-            throw new Error(historicalData.error || 'Failed to fetch historical data');
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to generate forecast');
         }
         
-        // Simulate forecast generation (in a real implementation, this would call ML models)
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate processing time
-        
-        // Generate mock forecast data
-        const forecast = generateMockForecast(historicalData.costs, parseInt(days));
-        
-        // Display results
-        displayForecastResults(forecast, serverId, days, model);
+        // Display results with integrated accuracy
+        displayForecastResults(data, serverId, days, model);
         
     } catch (error) {
         console.error('Forecast generation error:', error);
@@ -215,24 +216,32 @@ function generateMockForecast(historicalData, days) {
     return forecast;
 }
 
-function displayForecastResults(forecast, serverId, days, model) {
+function displayForecastResults(data, serverId, days, model) {
     // Show results section
     document.getElementById('forecastResults').classList.remove('hidden');
     
     // Update summary statistics
-    const totalCost = forecast.reduce((sum, f) => sum + f.predicted_cost, 0);
-    const avgCost = totalCost / forecast.length;
+    const totalCost = data.summary.total_predicted_cost;
+    const avgCost = data.summary.avg_daily_cost;
     
     document.getElementById('forecastTotal').textContent = window.formatCurrency(totalCost);
     document.getElementById('forecastAvg').textContent = window.formatCurrency(avgCost);
-    document.getElementById('forecastAccuracy').textContent = '8.5%'; // Mock MAPE
-    document.getElementById('forecastInfo').textContent = `${serverId} - ${days} days - ${model.toUpperCase()} model`;
+    document.getElementById('forecastModel').textContent = data.model_used;
+    
+    // Display accuracy
+    if (data.accuracy && data.accuracy.status === 'success') {
+        document.getElementById('forecastAccuracy').textContent = data.accuracy.mape + '%';
+    } else {
+        document.getElementById('forecastAccuracy').textContent = 'N/A';
+    }
+    
+    document.getElementById('forecastInfo').textContent = `${serverId} - ${days} days - ${data.model_used} model`;
     
     // Create forecast chart
-    createForecastChartLocal(forecast);
+    createForecastChartLocal(data.forecasts);
     
     // Populate forecast table
-    populateForecastTable(forecast);
+    populateForecastTable(data.forecasts);
 }
 
 function createForecastChartLocal(forecast) {
@@ -298,5 +307,6 @@ function exportForecast() {
     // Mock export functionality
     alert('Forecast export functionality would be implemented here');
 }
+
 </script>
 {% endblock %}
