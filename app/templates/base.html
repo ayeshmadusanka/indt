@@ -10,8 +10,7 @@
     
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
     
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -135,25 +134,6 @@
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Footer -->
-    <footer class="bg-white border-t border-gray-200 mt-12">
-        <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-            <div class="flex flex-col md:flex-row justify-between items-center">
-                <div class="flex items-center text-sm text-gray-500 mb-4 md:mb-0">
-                    <i class="fas fa-university mr-2"></i>
-                    <span>INDT 4216 - Wayamba University of Sri Lanka</span>
-                </div>
-                <div class="flex items-center space-x-6 text-sm text-gray-500">
-                    <span>© {{ current_year }} Cost Forecasting Project</span>
-                    <a href="{{ url_for('health_check') }}" class="hover:text-gray-700">
-                        <i class="fas fa-heartbeat mr-1"></i>
-                        Status
-                    </a>
-                    <span class="text-xs">v{{ app_version }}</span>
-                </div>
-            </div>
-        </div>
-    </footer>
 
     <!-- JavaScript -->
     <script>

@@ -44,7 +44,6 @@
                 <select id="forecastModel" class="form-select">
                     <option value="arima">ARIMA</option>
                     <option value="prophet">Prophet</option>
-                    <option value="ensemble">Ensemble</option>
                 </select>
             </div>
             
@@ -230,91 +229,26 @@ function displayForecastResults(forecast, serverId, days, model) {
     document.getElementById('forecastInfo').textContent = `${serverId} - ${days} days - ${model.toUpperCase()} model`;
     
     // Create forecast chart
-    createForecastChart(forecast);
+    createForecastChartLocal(forecast);
     
     // Populate forecast table
     populateForecastTable(forecast);
 }
 
-function createForecastChart(forecast) {
-    const ctx = document.getElementById('forecastChart').getContext('2d');
+function createForecastChartLocal(forecast) {
+    const ctx = document.getElementById('forecastChart');
+    
+    if (!ctx) {
+        console.error('Forecast chart canvas not found');
+        return;
+    }
     
     if (forecastChart) {
         forecastChart.destroy();
     }
     
-    const dates = forecast.map(f => f.date);
-    const predictions = forecast.map(f => f.predicted_cost);
-    const lowerBounds = forecast.map(f => f.confidence_lower);
-    const upperBounds = forecast.map(f => f.confidence_upper);
-    
-    forecastChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: dates,
-            datasets: [
-                {
-                    label: 'Predicted Cost',
-                    data: predictions,
-                    borderColor: 'rgb(59, 130, 246)',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    tension: 0.1,
-                    fill: false
-                },
-                {
-                    label: 'Confidence Range',
-                    data: upperBounds,
-                    borderColor: 'rgba(59, 130, 246, 0.3)',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    fill: '+1',
-                    tension: 0.1
-                },
-                {
-                    label: 'Lower Bound',
-                    data: lowerBounds,
-                    borderColor: 'rgba(59, 130, 246, 0.3)',
-                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                    fill: false,
-                    tension: 0.1
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return window.formatCurrency(value);
-                        }
-                    }
-                },
-                x: {
-                    type: 'time',
-                    time: {
-                        parser: 'YYYY-MM-DD',
-                        displayFormats: {
-                            day: 'MMM DD'
-                        }
-                    }
-                }
-            },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': ' + window.formatCurrency(context.parsed.y);
-                        }
-                    }
-                },
-                legend: {
-                    position: 'top'
-                }
-            }
-        }
-    });
+    // Use the createForecastChart function from charts.js
+    forecastChart = createForecastChart(ctx.getContext('2d'), forecast);
 }
 
 function populateForecastTable(forecast) {
